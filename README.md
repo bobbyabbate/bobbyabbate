@@ -408,11 +408,6 @@ are intentionally excluded from this repo via `.gitignore`. Use
 
 ## Schema recap
 
-```
-associations 1───* sites *───1 companies
-                   sites 1───* domains
-```
-
 - `companies.is_on_hold`, `companies.is_deleted`
 - `sites.is_supercharged`, `sites.is_deleted`
 - `domains.is_primary`, `domains.is_deleted`
