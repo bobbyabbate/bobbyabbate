@@ -406,9 +406,6 @@ are intentionally excluded from this repo via `.gitignore`. Use
 
 # Treehouse Reporting — SQL Exercises
 
-Solutions to the three reporting exercises from `SQL.pdf`, written and tested
-against the schema/data in `Treehouse.sql`.
-
 ## Schema recap
 
 ```
