@@ -403,3 +403,106 @@ bootstrapApplication(AppComponent, {
 *Note: `environment.ts` / `environment.prod.ts` (which hold the real API key)
 are intentionally excluded from this repo via `.gitignore`. Use
 `environment.template.ts` to create your own local copies.*
+
+# Treehouse Reporting — SQL Exercises
+
+Solutions to the three reporting exercises from `SQL.pdf`, written and tested
+against the schema/data in `Treehouse.sql`.
+
+## Schema recap
+
+```
+associations 1───* sites *───1 companies
+                   sites 1───* domains
+```
+
+- `companies.is_on_hold`, `companies.is_deleted`
+- `sites.is_supercharged`, `sites.is_deleted`
+- `domains.is_primary`, `domains.is_deleted`
+
+**"Active"** (per the spec) means: not deleted, not on hold, and doesn't
+belong to anything deleted or on hold. Concretely:
+
+- An active **company** → `is_on_hold = 0 AND is_deleted = 0`
+- An active **site** → the site itself isn't deleted, **and** its company is
+  active (not on hold, not deleted). Sites have no `is_on_hold` column of
+  their own, so that flag only ever comes from the parent company.
+- An active **domain** → the domain itself isn't deleted, **and** its site is
+  active (which cascades the company check above).
+
+All three queries apply that same chain of conditions; only the join target
+and filters differ.
+
+## 1. Active primary, supercharged domains for "Basement Systems, Inc."
+
+Straight chain-join from `domains` up to `associations`, filtering on the
+association name plus the primary/supercharged/active flags.
+
+```sql
+SELECT
+    a.name  AS association_name,
+    c.name  AS company_name,
+    d.domain AS domain
+FROM domains d
+JOIN sites s        ON s.id = d.site
+JOIN companies c    ON c.id = s.company
+JOIN associations a ON a.id = s.association
+WHERE a.name = 'Basement Systems, Inc.'
+  AND d.is_primary = 1
+  AND s.is_supercharged = 1
+  AND d.is_deleted = 0
+  AND s.is_deleted = 0
+  AND c.is_deleted = 0
+  AND c.is_on_hold = 0;
+```
+
+Against the sample data this returns **1 row**:
+`Basement Systems, Inc. | Scelerisque Lorem Ipsum Incorporated | aliquam.ca`
+
+## 2. Active sites with no domain at all
+
+Same active-site filter as above, plus a `NOT EXISTS` against `domains` to
+find sites with zero domain rows (deleted or not — they simply have none).
+
+```sql
+SELECT
+    a.name AS association_name,
+    c.name AS company_name,
+    s.name AS site_name
+FROM sites s
+JOIN companies c    ON c.id = s.company
+JOIN associations a ON a.id = s.association
+WHERE s.is_deleted = 0
+  AND c.is_deleted = 0
+  AND c.is_on_hold = 0
+  AND NOT EXISTS (
+      SELECT 1 FROM domains d WHERE d.site = s.id
+  );
+```
+
+Returns **12 rows** against the sample data.
+
+## 3. Active sites with domains, where every domain is deleted
+
+The site must (a) be active, (b) have at least one domain row, and (c) have
+no domain row that is *not* deleted. Two `EXISTS`/`NOT EXISTS` checks capture
+that: one confirms domains exist, the other confirms none of them are live.
+
+```sql
+SELECT DISTINCT
+    s.id   AS site_id,
+    s.name AS site_name
+FROM sites s
+JOIN companies c ON c.id = s.company
+WHERE s.is_deleted = 0
+  AND c.is_deleted = 0
+  AND c.is_on_hold = 0
+  AND EXISTS (
+      SELECT 1 FROM domains d WHERE d.site = s.id
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM domains d WHERE d.site = s.id AND d.is_deleted = 0
+  );
+```
+
+Returns **6 rows** against the sample data (site ids 31, 53, 62, 83, 87, 96).
